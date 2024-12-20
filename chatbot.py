@@ -1,49 +1,31 @@
 from flask import Flask, render_template, request
-from langchain_ollama import OllamaLLM
-from langchain.prompts import ChatPromptTemplate
+import openai
+import os
 
-# Initialize the Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize Ollama model (e.g., Mistral or Llama) via Langchain
-model = OllamaLLM(model="mistral")
+# Set OpenAI API key (ensure your environment variable is set correctly)
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
-# Template for conversational history
-template = """
-Here's the conversation so far: {history}
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-Now, the question: {question}
+@app.route('/ask', methods=['POST'])
+def ask():
+    user_input = request.form['user_input']
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",  # You can replace this with another model if needed
+            prompt=user_input,
+            max_tokens=150
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return str(e)
 
-Answer:
-"""
-prompt = ChatPromptTemplate.from_template(template)
-chain = prompt | model
-
-# Initialize conversation history (to store the conversation)
-conversation_history = ""
-
-# Home route to handle user input and display responses
-@app.route("/", methods=["GET", "POST"])
-def chat():
-    global conversation_history  # Track conversation history globally
-    if request.method == "POST":
-        user_input = request.form["user_input"]
-
-        # Add the user's message to the conversation history
-        conversation_history += f"\nUser: {user_input}"
-
-        # Create a response using Ollama model with the conversation history
-        result = chain.invoke({"history": conversation_history, "question": user_input})
-        bot_response = result.strip()
-
-        # Add the bot's response to the conversation history
-        conversation_history += f"\nAI: {bot_response}"
-
-        # Return the result and updated history to the HTML page
-        return render_template("index.html", result=bot_response, history=conversation_history)
-    
-    return render_template("index.html", history=conversation_history)
-
-# Run the Flask app
-if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == '__main__':
+    # Get the port from environment variables (for Render deployment)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
